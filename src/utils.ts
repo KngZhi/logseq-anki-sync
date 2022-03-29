@@ -2,7 +2,6 @@ import ohm from 'ohm-js';
 import _ from 'lodash';
 import replaceAsync from "string-replace-async";
 import '@logseq/libs';
-import { BlockEntity } from "@logseq/libs/dist/LSPlugin.user";
 import { Block, Note } from './types';
 
 export function regexPraser(input: string): RegExp {
@@ -241,6 +240,14 @@ function removeContentTags(content: string): string {
     return arr.join('\n')
 }
 
+function removeBlockProperty(content: string): string {
+    return content.replace(/:PROPERTIES:\n((.|\n)*?):END:\n?/gm, '')
+}
+
+function cleanContent(content: string): string {
+    return removeContentTags(removeBlockProperty(content))
+}
+
 function createCloze(field: string) {
     if (field.includes('{{') && field.includes('}}')) {
         let count = 0
@@ -262,13 +269,13 @@ function clozeTransform(note: Note) {
 }
 
 export function blockToNote(block: Block): Note {
-    const { tags, content, children = [], meta: { properties } = {} } = block
-    let front: string = content
+    const { tags, content, children = [], } = block
+    let front: string = cleanContent(content)
     let back = children.map(block => block.content).join()
     let note: Note = {
         deckName: 'Default',
         modelName: 'keypoint',
-        fields: { front: removeContentTags(front), back },
+        fields: { front, back },
         tags,
     }
 
