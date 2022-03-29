@@ -30,8 +30,16 @@ export function invoke(action: string, params = {}): any {
         });
 
         xhr.open('POST', 'http://127.0.0.1:' + ANKI_PORT.toString());
-        xhr.send(JSON.stringify({ action, version: 6, params }));
+        xhr.send(JSON.stringify({ action, version: 6, params }))
     })
+}
+
+export async function addNotes(notes: Note[]): Array<NotedId | null> {
+    try {
+        return (await invoke('addNotes', { notes }))
+    } catch (error) {
+        throw error
+    }
 }
 
 export async function requestPermission(): Promise<any> {

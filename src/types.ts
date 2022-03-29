@@ -1,3 +1,5 @@
+import { BlockEntity, BlockUUID } from "@logseq/libs/dist/LSPlugin.user"
+
 export type NotedId = number
 export type ModelName = string
 export type DeckName = string
@@ -25,4 +27,18 @@ export interface Note {
     audio?: Array<Media>;
     video?: Array<Media>;
     picture?: Array<Media>;
+}
+
+export interface Block extends BlockEntity {
+    refs: Array<BlockUUID>,
+    tags: Tags,
+}
+
+export interface Response {
+    result: any;
+    error: string;
+}
+
+export interface AddNotesResponse extends Response {
+    result: Array<NotedId | null>
 }
