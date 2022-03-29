@@ -5,8 +5,11 @@ import { template_front, template_back, template_files } from './templates/AnkiC
 import { Note } from './notes/Note';
 import { ClozeNote } from './notes/ClozeNote';
 import { MultilineCardNote } from './notes/MultilineCardNote';
+import * as LogseqQuery from "./query";
 import _ from 'lodash';
-import { get_better_error_msg, confirm } from './utils';
+import { get_better_error_msg, confirm, blockToNote } from './utils';
+import { CLIENT_RENEG_LIMIT } from 'tls';
+import { Note as NoteT } from "./types";
 
 export class LogseqToAnkiSync {
     static isSyncing: boolean;
@@ -17,13 +20,26 @@ export class LogseqToAnkiSync {
         if (LogseqToAnkiSync.isSyncing) { console.log(`Syncing already in process...`); return; }
         LogseqToAnkiSync.isSyncing = true;
         try {
-          await this.performSync();
-        } 
+          await this.mySync();
+        }
         catch (e) {
           logseq.App.showMsg(get_better_error_msg(e.toString()), 'warning');
           console.error(e);
-        } 
+        }
         LogseqToAnkiSync.isSyncing = false;
+    }
+
+    private async mySync() {
+        const graphName = _.get(await logseq.App.getCurrentGraph(), 'name') || 'Default'
+        logseq.App.showMsg(`Starting Logseq to Anki Sync`);
+        const blocks = await LogseqQuery.getBlocksByTag('card')
+        console.log('Blocks', blocks)
+        const notes = blocks.map(blockToNote)
+        console.log('Anki Notes', notes)
+        const addResults = await AnkiConnect.addNotes(notes)
+        console.log('Anki Response', addResults)
+
+        await AnkiConnect.invoke("reloadCollection", {});
     }
 
     private async performSync(): Promise<void> {
@@ -34,15 +50,16 @@ export class LogseqToAnkiSync {
 
         // -- Request Access --
         await AnkiConnect.requestPermission();
-        
+
         // -- Create models if it doesn't exists --
-        await AnkiConnect.createModel(this.modelName, ["uuid-type", "uuid", "Text", "Extra", "Breadcrumb", "Config"], template_front, template_back, template_files);
+        // await AnkiConnect.createModel(this.modelName, ["uuid-type", "uuid", "Text", "Extra", "Breadcrumb", "Config"], template_front, template_back, template_files);
 
         // -- Get the notes that are to be synced from logseq --
         let notes : Array<Note> = [...(await ClozeNote.getNotesFromLogseqBlocks()), ...(await MultilineCardNote.getNotesFromLogseqBlocks())];
         for (let note of notes) { // Force persistance of note's logseq block uuid accross re-index by adding id property to block in logseq
             if (!note.properties["id"]) { logseq.Editor.upsertBlockProperty(note.uuid, "id", note.uuid); }
         }
+
         console.log("Notes:", notes);
 
         // -- Prepare Anki Note Manager --
@@ -59,7 +76,7 @@ export class LogseqToAnkiSync {
             else toUpdateNotes.push(note);
         }
         let noteAnkiIds: Array<number> = await Promise.all(notes.map(async block => await block.getAnkiId()));  // Flatten current logseq block's anki ids
-        let AnkiIds: Array<number> = [...ankiNoteManager.noteInfoMap.keys()]; 
+        let AnkiIds: Array<number> = [...ankiNoteManager.noteInfoMap.keys()];
         for(let ankiId of AnkiIds) {
             if(!noteAnkiIds.includes(ankiId)) {
                toDeleteNotes.push(ankiId);
@@ -69,7 +86,7 @@ export class LogseqToAnkiSync {
         // -- Prompt the user what actions are going to be performed --
         let confirm_msg = `<b>The logseq to anki sync plugin will attempt to perform the following actions:</b><br/>Create ${toCreateNotes.length} new anki notes<br/>Update ${toUpdateNotes.length} existing anki notes<br/>Delete ${toDeleteNotes.length} anki notes<br/><br/>Are you sure you want to coninue?`;
         if (!(await confirm(confirm_msg))) { console.log("Sync Aborted by user!"); return; }
-        
+
         // -- Sync --
         let start_time = performance.now();
         await this.createNotes(toCreateNotes, failedCreated, ankiNoteManager);

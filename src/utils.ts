@@ -2,6 +2,8 @@ import ohm from 'ohm-js';
 import _ from 'lodash';
 import replaceAsync from "string-replace-async";
 import '@logseq/libs';
+import { BlockEntity } from "@logseq/libs/dist/LSPlugin.user";
+import { Block, Note } from './types';
 
 export function regexPraser(input: string): RegExp {
     if (typeof input !== "string") {
@@ -32,7 +34,7 @@ export function string_to_arr(str: string): any {
         Regex =  "/" seqReg "/" (letter|lineTerminator)*
         seqReg = (("\\/" |"\\\\"|~("/")  any))+
         seqStr = (("\\\\"|"\\'"| ~("\'")  any))*
-            
+
         // External rules
         whitespace = "\t"
                    | "\x0B"    -- verticalTab
@@ -174,7 +176,7 @@ export async function confirm(msg: string): Promise<boolean> {
         logseq.provideUI({
             key: 'logseq-anki-sync-confirm',
             path: "body",
-            // Logseq alike dialog template 
+            // Logseq alike dialog template
             template: `
             <div class="ui__modal anki_sync_confirm" style="z-index: 9999;">
             <div class="ui__modal-overlay ease-out duration-300 opacity-100 enter-done">
@@ -226,4 +228,18 @@ export async function confirm(msg: string): Promise<boolean> {
             }
         )
     });
+}
+
+export function blockToNote(block: Block): Note {
+    const { tags, content, children = [], meta: { properties } = {} } = block
+    let front = content
+    let back = children.map(block => block.content).join()
+    const note: Note = {
+        modelName: 'keypoint',
+        deckName: 'Default',
+        fields: { front, back },
+        tags: tags.filter(x => x === 'card'),
+    }
+
+    return note
 }
