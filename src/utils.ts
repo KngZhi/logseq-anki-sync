@@ -230,15 +230,50 @@ export async function confirm(msg: string): Promise<boolean> {
     });
 }
 
+function removeContentTags(content: string): string {
+    if (!content) {
+        return ''
+    }
+    const arr = content.split('\n')
+    arr[0] = arr[0].trim()
+        .replace(/:(\w+)(.*?):$/g, '')
+        .trim()
+    return arr.join('\n')
+}
+
+function createCloze(field: string) {
+    if (field.includes('{{') && field.includes('}}')) {
+        let count = 0
+        return field.replace(/\{\{(.*?)\}\}/g, (match, p1, offset) => {
+            count++
+            return `{{c${count}::${p1}}}`
+        })
+    } else {
+        return field
+    }
+}
+
+function clozeTransform(note: Note) {
+    const { fields: { front }, modelName } = note
+    note.fields.front = createCloze(front)
+    note.modelName = 'cloze'
+
+    return note
+}
+
 export function blockToNote(block: Block): Note {
     const { tags, content, children = [], meta: { properties } = {} } = block
-    let front = content
+    let front: string = content
     let back = children.map(block => block.content).join()
-    const note: Note = {
-        modelName: 'keypoint',
+    let note: Note = {
         deckName: 'Default',
-        fields: { front, back },
-        tags: tags.filter(x => x === 'card'),
+        modelName: 'keypoint',
+        fields: { front: removeContentTags(front), back },
+        tags,
+    }
+
+    if (tags.includes('cloze')) {
+        note = Object.assign(note, clozeTransform(note))
     }
 
     return note
