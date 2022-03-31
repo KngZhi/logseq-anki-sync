@@ -40,6 +40,7 @@ export class LogseqToAnkiSync {
         console.log('Anki Response', addResults)
 
         await AnkiConnect.invoke("reloadCollection", {});
+        logseq.App.showMsg(`Sync successed!`);
     }
 
     private async performSync(): Promise<void> {

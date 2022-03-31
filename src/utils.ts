@@ -3,6 +3,7 @@ import _ from 'lodash';
 import replaceAsync from "string-replace-async";
 import '@logseq/libs';
 import { Block, Note } from './types';
+import { noteToHtml } from './Converter'
 
 export function regexPraser(input: string): RegExp {
     if (typeof input !== "string") {
@@ -283,5 +284,5 @@ export function blockToNote(block: Block): Note {
         note = Object.assign(note, clozeTransform(note))
     }
 
-    return note
+    return noteToHtml(note)
 }

@@ -6,6 +6,7 @@ import * as cheerio from 'cheerio';
 import { decodeHTMLEntities, getRandomUnicodeString, safeReplace, safeReplaceAsync } from './utils';
 import _ from 'lodash';
 import { Mldoc } from 'mldoc';
+import { Note } from './types'
 
 let mldocsOptions = {
     "toc": false,
@@ -19,6 +20,42 @@ let mldocsOptions = {
     "export_md_remove_options": [],
     "hiccup_in_block": true
 };
+
+function orgToHtml(result: string) {
+    let parsedJson = Mldoc.parseInlineJson(
+        result,
+        JSON.stringify(mldocsOptions),
+        JSON.stringify({})
+    );
+    result = Mldoc.export("html", result,
+        JSON.stringify(mldocsOptions),
+        JSON.stringify({})
+    );
+    return prettifyHtml(result)
+}
+
+export function noteToHtml(note: Note): Note {
+    const copyNote = Object.assign(note, {})
+    const { fields } = copyNote
+    mldocsOptions.format = "Org"
+    Object.keys(fields).forEach((key) => {
+        fields[key] = orgToHtml(fields[key].trim())
+    })
+    return copyNote
+}
+
+function prettifyHtml(result: string): string {
+    let $ = cheerio.load(result, { decodeEntities: false });
+    $('pre code').each(function (_, ele) { // Syntax hightlight block code (block codes are preceded by pre)
+        $(ele).addClass("hljs");
+        if (ele.attribs["data-lang"]) {
+            $(ele).html(hljs.highlight(ele.attribs["data-lang"], $(ele).html()).value.replace(/\n$/, ""));
+        } else {
+            $(ele).html(hljs.highlightAuto($(ele).html()).value.replace(/\n$/, ""))
+        };
+    });
+    return decodeHTMLEntities(decodeHTMLEntities($('#content ul li').html() || "")).trim();
+}
 
 export async function convertLogseqToHtml(content: string, format: string = "markdown"): Promise<string> {
     let result = content;
