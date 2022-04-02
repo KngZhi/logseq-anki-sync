@@ -14,6 +14,8 @@ export interface Media {
     fields: string[],
 }
 
+export type TagWithModel = [Tag, ModelName]
+
 export interface Note {
     id?: NotedId,
     deckName: DeckName;

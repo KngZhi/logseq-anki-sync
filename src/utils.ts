@@ -2,7 +2,7 @@ import ohm from 'ohm-js';
 import _ from 'lodash';
 import replaceAsync from "string-replace-async";
 import '@logseq/libs';
-import { Block, Note } from './types';
+import { Block, Note, Tag, Tags, TagWithModel } from './types';
 import { noteToHtml } from './Converter'
 
 export function regexPraser(input: string): RegExp {
@@ -261,13 +261,20 @@ function createCloze(field: string) {
     }
 }
 
-function clozeTransform(note: Note) {
+function clozeTransform(note: Note): Note {
     const { fields: { front }, modelName } = note
     note.fields.front = createCloze(front)
     note.modelName = 'cloze'
 
     return note
 }
+
+// Data Struct
+// [[]]
+//
+// function whichNoteType(tags: Tags): string {
+//     const models: Array<TagWithModel> = logseq.settings.models;
+// }
 
 export function blockToNote(block: Block): Note {
     const { tags, content, children = [], } = block
@@ -280,9 +287,32 @@ export function blockToNote(block: Block): Note {
         tags,
     }
 
-    if (tags.includes('cloze')) {
-        note = Object.assign(note, clozeTransform(note))
+    const whichModel = (tags: Tags): Tag =>{
+        if (tags.length === 1 && tags.includes('card')) {
+            return 'keypoint'
+        } else if (tags.length > 1){
+            return tags[1]
+        } else {
+            logseq.App.showMsg(`NoteType: ${tags[1]} is not available`)
+            return ''
+        }
     }
 
-    return noteToHtml(note)
+    const MODEL_MAP = {
+        'keypoint': () => note,
+        'cloze': () => Object.assign(note, clozeTransform(note)),
+        'bidirectional': () => {
+            note.modelName = 'bidirectional'
+            return note
+        },
+        '': () => {
+            note.tags.push('Error')
+            return note
+        },
+        // TODO
+        'update': () => note
+    }
+
+    console.log(note, MODEL_MAP[whichModel(tags)])
+    return noteToHtml(MODEL_MAP[whichModel(tags)]())
 }
