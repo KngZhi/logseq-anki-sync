@@ -31,6 +31,8 @@ export interface Note {
     picture?: Array<Media>;
 }
 
+export type BlockProperties = Record<string, string | string[]>
+
 export interface Block extends BlockEntity {
     refs: Array<BlockUUID>,
     tags: Tags,
