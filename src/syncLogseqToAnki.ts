@@ -10,6 +10,7 @@ import _ from 'lodash';
 import { get_better_error_msg, confirm, blockToNote } from './utils';
 import { CLIENT_RENEG_LIMIT } from 'tls';
 import { Note as NoteT } from "./types";
+import { BlockIdentity } from "@logseq/libs/dist/LSPlugin.user"
 
 export class LogseqToAnkiSync {
     static isSyncing: boolean;
@@ -20,11 +21,11 @@ export class LogseqToAnkiSync {
         if (LogseqToAnkiSync.isSyncing) { console.log(`Syncing already in process...`); return; }
         LogseqToAnkiSync.isSyncing = true;
         try {
-          await this.mySync();
+            await this.mySync();
         }
         catch (e) {
-          logseq.App.showMsg(get_better_error_msg(e.toString()), 'warning');
-          console.error(e);
+            logseq.App.showMsg(get_better_error_msg(e.toString()), 'warning');
+            console.error(e);
         }
         LogseqToAnkiSync.isSyncing = false;
     }
@@ -32,13 +33,28 @@ export class LogseqToAnkiSync {
     private async mySync() {
         const graphName = _.get(await logseq.App.getCurrentGraph(), 'name') || 'Default'
         logseq.App.showMsg(`Starting Logseq to Anki Sync`);
-        const blocks = await LogseqQuery.getBlocksByTag('card')
+        const blocks = await LogseqQuery.getBlocksByTag('cloze')
         console.log('Blocks', blocks)
-        const notes = blocks.map(blockToNote)
+        const notes = blocks
+            .map(blockToNote)
+            .filter(note => !note.id)
         console.log('Anki Notes', notes)
         const addResults = await AnkiConnect.addNotes(notes)
         console.log('Anki Response', addResults)
 
+        Promise.all(addResults.map(async (note_id, idx) => {
+            const blockId: BlockIdentity = blocks[idx].uuid;
+            if (note_id) {
+                await logseq.Editor.upsertBlockProperty(
+                    blockId,
+                    "note_id",
+                    note_id.toString())
+            }
+            await logseq.Editor.upsertBlockProperty(
+                blockId,
+                "note_status",
+                "UPDATED")
+        }))
         await AnkiConnect.invoke("reloadCollection", {});
         logseq.App.showMsg(`Sync successed!`);
     }
@@ -56,7 +72,7 @@ export class LogseqToAnkiSync {
         // await AnkiConnect.createModel(this.modelName, ["uuid-type", "uuid", "Text", "Extra", "Breadcrumb", "Config"], template_front, template_back, template_files);
 
         // -- Get the notes that are to be synced from logseq --
-        let notes : Array<Note> = [...(await ClozeNote.getNotesFromLogseqBlocks()), ...(await MultilineCardNote.getNotesFromLogseqBlocks())];
+        let notes: Array<Note> = [...(await ClozeNote.getNotesFromLogseqBlocks()), ...(await MultilineCardNote.getNotesFromLogseqBlocks())];
         for (let note of notes) { // Force persistance of note's logseq block uuid accross re-index by adding id property to block in logseq
             if (!note.properties["id"]) { logseq.Editor.upsertBlockProperty(note.uuid, "id", note.uuid); }
         }
@@ -78,9 +94,9 @@ export class LogseqToAnkiSync {
         }
         let noteAnkiIds: Array<number> = await Promise.all(notes.map(async block => await block.getAnkiId()));  // Flatten current logseq block's anki ids
         let AnkiIds: Array<number> = [...ankiNoteManager.noteInfoMap.keys()];
-        for(let ankiId of AnkiIds) {
-            if(!noteAnkiIds.includes(ankiId)) {
-               toDeleteNotes.push(ankiId);
+        for (let ankiId of AnkiIds) {
+            if (!noteAnkiIds.includes(ankiId)) {
+                toDeleteNotes.push(ankiId);
             }
         }
 
@@ -172,7 +188,7 @@ export class LogseqToAnkiSync {
     }
 
     private async deleteNotes(toDeleteNotes: number[], ankiNoteManager: LazyAnkiNoteManager, failedDeleted) {
-        for(let ankiId of toDeleteNotes){
+        for (let ankiId of toDeleteNotes) {
             ankiNoteManager.deleteNote(ankiId);
         }
         let subOperationResults = await ankiNoteManager.execute("deleteNotes");

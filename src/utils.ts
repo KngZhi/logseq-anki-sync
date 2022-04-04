@@ -2,7 +2,7 @@ import ohm from 'ohm-js';
 import _ from 'lodash';
 import replaceAsync from "string-replace-async";
 import '@logseq/libs';
-import { Block, Note, Tag, Tags, TagWithModel } from './types';
+import { Block, Note, Tag, Tags, TagWithModel, BlockProperties } from './types';
 import { noteToHtml } from './Converter'
 
 export function regexPraser(input: string): RegExp {
@@ -254,6 +254,9 @@ function createCloze(field: string) {
         let count = 0
         return field.replace(/\{\{(.*?)\}\}/g, (match, p1, offset) => {
             count++
+            // if (p1.includes('::')) {
+            //     p1 = p1.replace(/::/, '\\:\\:')
+            // }
             return `{{c${count}::${p1}}}`
         })
     } else {
@@ -269,50 +272,29 @@ function clozeTransform(note: Note): Note {
     return note
 }
 
-// Data Struct
-// [[]]
-//
-// function whichNoteType(tags: Tags): string {
-//     const models: Array<TagWithModel> = logseq.settings.models;
-// }
-
 export function blockToNote(block: Block): Note {
-    const { tags, content, children = [], } = block
+    const { tags, content, children = [], properties = {} } = block
     let front: string = cleanContent(content)
     let back = children.map(block => block.content).join()
+    console.log(block.uuid, properties)
+
+    let { noteType = 'keypoint', noteStatus, noteId } = properties
+    
+
     let note: Note = {
+        id: noteId,
         deckName: 'Default',
-        modelName: 'keypoint',
+        modelName: noteType,
         fields: { front, back },
         tags,
     }
-
-    const whichModel = (tags: Tags): Tag =>{
-        if (tags.length === 1 && tags.includes('card')) {
-            return 'keypoint'
-        } else if (tags.length > 1){
-            return tags[1]
-        } else {
-            logseq.App.showMsg(`NoteType: ${tags[1]} is not available`)
-            return ''
-        }
-    }
+    console.log(note, properties)
 
     const MODEL_MAP = {
         'keypoint': () => note,
         'cloze': () => Object.assign(note, clozeTransform(note)),
-        'bidirectional': () => {
-            note.modelName = 'bidirectional'
-            return note
-        },
-        '': () => {
-            note.tags.push('Error')
-            return note
-        },
-        // TODO
-        'update': () => note
+        'bidirectional': () => note,
     }
 
-    console.log(note, MODEL_MAP[whichModel(tags)])
-    return noteToHtml(MODEL_MAP[whichModel(tags)]())
+    return noteToHtml(MODEL_MAP[noteType]())
 }
